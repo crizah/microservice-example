@@ -19,7 +19,7 @@ func generateToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func GenerateVerificationLink() (string, error) {
+func (s *Server) GenerateVerificationLink(username string) (string, error) {
 	// generate token
 	token, err := generateToken()
 	if err != nil {
@@ -27,6 +27,11 @@ func GenerateVerificationLink() (string, error) {
 	}
 	// generate link using token
 	link := "https://example.com/auth/verify-email?token=" + token
+
+	err = s.PutintoTokenTable(username, token, link)
+	if err != nil {
+		return "", err
+	}
 
 	// a user might try to request multiple email verifications.
 	// Since we have a generous expiration time, we can reuse the previously generated token
@@ -37,8 +42,8 @@ func GenerateVerificationLink() (string, error) {
 
 }
 
-func CreateSNSTopic(topicName string, cfg aws.Config) (string, error) {
-	snsClient := sns.NewFromConfig(cfg)
+func (s *Server) CreateSNSTopic(topicName string) (string, error) {
+	snsClient := sns.NewFromConfig(s.cfg)
 
 	output, err := snsClient.CreateTopic(context.TODO(), &sns.CreateTopicInput{
 		Name: aws.String(topicName),
@@ -51,8 +56,8 @@ func CreateSNSTopic(topicName string, cfg aws.Config) (string, error) {
 	return *output.TopicArn, nil
 }
 
-func SendSNS(cfg aws.Config, snsTopicARN string, link string) error {
-	snsClient := sns.NewFromConfig(cfg)
+func (s *Server) SendSNS(snsTopicARN string, link string) error {
+	snsClient := sns.NewFromConfig(s.cfg)
 
 	_, err := snsClient.Publish(context.TODO(), &sns.PublishInput{
 		TopicArn: aws.String(snsTopicARN),
