@@ -255,6 +255,74 @@ func (s *Server) handleSignUp(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func (s *Server) handleEmailVerification(w http.ResponseWriter, r *http.Request) {
+	// user clicks on link
+	// frontend sends token to server
+	// server verifies token
+	// marks user as verified
+
+	enablePostCors(w)
+
+	if r.Method == http.MethodOptions {
+		http.Error(w, "not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// get response (token)
+
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Error(w, "Missing token", http.StatusBadRequest)
+		return
+	}
+
+	// get username from token table
+
+	username, err := s.GetUsernameWithToken(token)
+	if err != nil {
+		http.Error(w, "error querying token table", http.StatusInternalServerError)
+		return
+	}
+
+	// check if token is expired
+	Item, err := s.QueryTokenTableWithUsername(username)
+	if err != nil {
+		http.Error(w, "error querying tokens table", http.StatusInternalServerError)
+		return
+	}
+
+	valid, err := s.CheckTokenExpired(username, Item)
+	if !valid {
+		// token is no longer valid
+		// resend link
+
+		http.Error(w, "Token expired", http.StatusUnauthorized)
+		return
+
+	}
+
+	// mark user as verified
+	err = s.SetUserVerified(username)
+	if err != nil {
+		http.Error(w, "error verifying user", http.StatusInternalServerError)
+		return
+	}
+
+	// delete token
+
+	err = s.DeleteToken(username)
+	if err != nil {
+		http.Error(w, "error deleting token", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Email verified successfully",
+	})
+
+}
+
 func (s *Server) handleResend(w http.ResponseWriter, r *http.Request) {
 	// gets reponse as either verified or request to resend link
 	enablePostCors(w)
@@ -283,7 +351,7 @@ func (s *Server) handleResend(w http.ResponseWriter, r *http.Request) {
 
 	// query token table to see if token for user exists and not expired
 
-	link, err := s.QueryTokenTable(res.Username) // true means token valid
+	link, err := s.GetTokenLinkWithUsername(res.Username) // true means token valid
 	if err != nil {
 		http.Error(w, "error querying token table", http.StatusInternalServerError)
 		return

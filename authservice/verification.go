@@ -11,6 +11,7 @@ import (
 )
 
 func generateToken() (string, error) {
+
 	b := make([]byte, 128)
 	_, err := rand.Read(b)
 	if err != nil {
@@ -26,7 +27,7 @@ func (s *Server) GenerateVerificationLink(username string) (string, error) {
 		return "", err
 	}
 	// generate link using token
-	link := "https://example.com/auth/verify-email?token=" + token
+	link := "https://yourfrontend.com/verify-email?token=" + token
 
 	err = s.PutintoTokenTable(username, token, link)
 	if err != nil {
@@ -68,3 +69,46 @@ func (s *Server) SendSNS(snsTopicARN string, link string) error {
 	return err
 
 }
+
+// func (s *Server) SendVerificationEmail(email, username, link string) error {
+//     htmlBody := fmt.Sprintf(`
+//         <html>
+//             <body>
+//                 <h2>Verify Your Email</h2>
+//                 <p>Hi %s,</p>
+//                 <p>Thanks for signing up! Please verify your email by clicking the link below:</p>
+//                 <a href="%s" style="background-color: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
+//                     Verify Email
+//                 </a>
+//                 <p>Or copy and paste this link in your browser:</p>
+//                 <p>%s</p>
+//                 <p>This link will expire in 24 hours.</p>
+//             </body>
+//         </html>
+//     `, username, link, link)
+
+//     textBody := fmt.Sprintf("Hi %s,\n\nPlease verify your email by clicking this link:\n%s\n\nThis link will expire in 24 hours.", username, link)
+
+//     input := &ses.SendEmailInput{
+//         Source: aws.String("noreply@yourdomain.com"),
+//         Destination: &ses.Destination{
+//             ToAddresses: []string{email},
+//         },
+//         Message: &ses.Message{
+//             Subject: &ses.Content{
+//                 Data: aws.String("Verify Your Email"),
+//             },
+//             Body: &ses.Body{
+//                 Html: &ses.Content{
+//                     Data: aws.String(htmlBody),
+//                 },
+//                 Text: &ses.Content{
+//                     Data: aws.String(textBody),
+//                 },
+//             },
+//         },
+//     }
+
+//     _, err := s.sesClient.SendEmail(context.TODO(), input)
+//     return err
+// }

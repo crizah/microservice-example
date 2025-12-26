@@ -5,6 +5,10 @@ import (
 	"net/http"
 )
 
+// whats left
+// password reset handler
+// creating session id and cookies(handleLogin)
+
 func main() {
 	server, err := initialiseServer()
 	if err != nil {
@@ -12,6 +16,7 @@ func main() {
 	}
 
 	http.HandleFunc("/signup", server.handleSignUp)
+	http.HandleFunc("/verify-email", server.handleEmailVerification)
 	http.HandleFunc("/login", server.handleLogin)
 	http.HandleFunc("/resend-verification", server.handleResend)
 

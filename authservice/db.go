@@ -53,6 +53,7 @@ func (s *Server) PutIntoPassTable(username string, salt string, hash string) err
 func (s *Server) PutintoTokenTable(username string, token string, link string) error {
 
 	// username is pk
+	// token in gsi called TokenIndex
 
 	now := time.Now().Unix()
 	expiresAt := time.Now().Add(24 * time.Hour).Unix()
@@ -244,7 +245,45 @@ func (s *Server) CheckUserVerified(email string, username string, check bool) (b
 	return verifiedAttr.Value, nil
 }
 
-func (s *Server) QueryTokenTable(username string) (string, error) {
+func (s *Server) GetUsernameWithToken(token string) (string, error) {
+	// gets username from token
+
+	result, err := s.dynamoClient.Query(context.TODO(), &dynamodb.QueryInput{
+		TableName:              aws.String("Token"),
+		IndexName:              aws.String("TokenIndex"),
+		KeyConditionExpression: aws.String("token = :token"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":token": &types.AttributeValueMemberS{Value: token},
+		},
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	if len(result.Items) == 0 {
+		return "", nil
+	}
+
+	user, ok := result.Items[0]["username"].(*types.AttributeValueMemberS)
+	if !ok {
+		return "", nil
+	}
+
+	return user.Value, nil
+}
+
+func (s *Server) DeleteToken(username string) error {
+	_, err := s.dynamoClient.DeleteItem(context.TODO(), &dynamodb.DeleteItemInput{
+		TableName: aws.String("Token"),
+		Key: map[string]types.AttributeValue{
+			"username": &types.AttributeValueMemberS{Value: username},
+		},
+	})
+	return err
+}
+
+func (s *Server) QueryTokenTableWithUsername(username string) (map[string]types.AttributeValue, error) {
 	result, err := s.dynamoClient.GetItem(context.TODO(), &dynamodb.GetItemInput{
 		TableName: aws.String("Token"),
 		Key: map[string]types.AttributeValue{
@@ -252,33 +291,60 @@ func (s *Server) QueryTokenTable(username string) (string, error) {
 		},
 	})
 	if err != nil {
-		return "", err
+		return nil, err
+
 	}
 
-	cA, ok := result.Item["createdAt"].(*types.AttributeValueMemberS)
+	return result.Item, nil
+
+}
+
+func (s *Server) CheckTokenExpired(username string, Item map[string]types.AttributeValue) (bool, error) {
+	// true if exists and not expired
+
+	cA, ok := Item["createdAt"].(*types.AttributeValueMemberS)
 
 	if !ok {
-		return "", nil
+		return true, nil
 	}
 
 	createdAt, err := strconv.ParseInt(cA.Value, 10, 64)
 	if err != nil {
-		return "", err
+		return true, err
 	}
 
-	eA, ok := result.Item["expiresAt"].(*types.AttributeValueMemberS)
+	eA, ok := Item["expiresAt"].(*types.AttributeValueMemberS)
 
 	if !ok {
-		return "", nil
+		return true, nil
 	}
 
 	expiredAt, err := strconv.ParseInt(eA.Value, 10, 64)
 	if err != nil {
-		return "", err
+		return true, err
 	}
 	now := time.Now().Unix()
 
 	if now < createdAt || now > expiredAt {
+		// token is expired
+		return true, nil
+	}
+
+	return false, nil
+
+}
+func (s *Server) GetTokenLinkWithUsername(username string) (string, error) {
+	// using username, returns link if token valid, else generate new token and link and return new link
+	Item, err := s.QueryTokenTableWithUsername(username)
+	if err != nil {
+		return "", err
+	}
+
+	expired, err := s.CheckTokenExpired(username, Item)
+	if err != nil {
+		return "", err
+	}
+	if expired {
 		// token is expired
 		// generate new token
 		link, err := s.GenerateVerificationLink(username) // this uses puinto token table,
@@ -289,7 +355,7 @@ func (s *Server) QueryTokenTable(username string) (string, error) {
 	}
 
 	// token is valid
-	link, ok := result.Item["link"].(*types.AttributeValueMemberS)
+	link, ok := Item["link"].(*types.AttributeValueMemberS)
 	if !ok {
 		return "", nil
 	}
