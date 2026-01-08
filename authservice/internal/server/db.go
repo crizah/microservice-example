@@ -20,7 +20,7 @@ func (s *Server) PutIntoPassTable(username string, salt string, hash string, ch 
 	// hash is reserved keyword
 
 	_, err := s.dynamoClient.PutItem(context.TODO(), &dynamodb.PutItemInput{
-		TableName: aws.String("Passwords"),
+		TableName: aws.String("Pass"),
 		Item: map[string]types.AttributeValue{
 			"username": &types.AttributeValueMemberS{Value: username},
 			"salt":     &types.AttributeValueMemberS{Value: salt},
@@ -34,7 +34,7 @@ func (s *Server) PutIntoPassTable(username string, salt string, hash string, ch 
 
 func (s *Server) UpdatePasswordInTable(username string, salt string, hash string) error {
 	_, err := s.dynamoClient.UpdateItem(context.TODO(), &dynamodb.UpdateItemInput{
-		TableName: aws.String("Passwords"),
+		TableName: aws.String("Pass"),
 		Key: map[string]types.AttributeValue{
 			"username": &types.AttributeValueMemberS{Value: username},
 		},
